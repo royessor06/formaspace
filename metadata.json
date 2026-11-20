@@ -1,0 +1,6 @@
+{
+  "name": "FormaSpace",
+  "description": "Multi-workspace project management platform for Sports, House, and Furniture containers with Google Sign-In and organization RBAC.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

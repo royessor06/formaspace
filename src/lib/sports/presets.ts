@@ -1,0 +1,480 @@
+import type {
+  SceneElement,
+  SceneElementType,
+  SportPresetId,
+} from './types';
+
+export interface SportPresetDefinition {
+  id: SportPresetId;
+  label: string;
+  description: string;
+  defaultDimensionsLabel: string;
+  buildElements: () => SceneElement[];
+}
+
+const ID_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_-';
+
+export function generateElementId(length = 12): string {
+  const bytes = new Uint8Array(length);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < length; i += 1) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  let out = '';
+  for (let i = 0; i < length; i += 1) {
+    out += ID_ALPHABET[bytes[i] % ID_ALPHABET.length];
+  }
+  return out;
+}
+
+export const SPORT_PRESETS: Record<SportPresetId, SportPresetDefinition> = {
+  basketball: {
+    id: 'basketball',
+    label: 'Basketball',
+    description: 'Full court surface with two baseline hoops',
+    defaultDimensionsLabel: '28 m × 15 m',
+    buildElements: () => [
+      {
+        id: generateElementId(),
+        type: 'playing_surface',
+        x: 0,
+        y: 0,
+        width: 28,
+        height: 15,
+        rotation: 0,
+        shape: 'rect',
+        materialId: null,
+        materialName: 'Acrylic Court Coating',
+        unitPrice: 45,
+        quantityFactor: 1,
+        label: 'Basketball Court Surface',
+      },
+      {
+        id: generateElementId(),
+        type: 'hoop',
+        x: 0.6,
+        y: 6.6,
+        width: 1.6,
+        height: 1.8,
+        rotation: 0,
+        shape: 'rect',
+        materialId: null,
+        materialName: 'Adjustable Hoop Assembly',
+        unitPrice: 1200,
+        quantityFactor: 1,
+        label: 'West Hoop',
+      },
+      {
+        id: generateElementId(),
+        type: 'hoop',
+        x: 25.8,
+        y: 6.6,
+        width: 1.6,
+        height: 1.8,
+        rotation: 180,
+        shape: 'rect',
+        materialId: null,
+        materialName: 'Adjustable Hoop Assembly',
+        unitPrice: 1200,
+        quantityFactor: 1,
+        label: 'East Hoop',
+      },
+    ],
+  },
+  football: {
+    id: 'football',
+    label: 'Football',
+    description: 'Turf playing pitch with two end goals',
+    defaultDimensionsLabel: '60 m × 40 m',
+    buildElements: () => [
+      {
+        id: generateElementId(),
+        type: 'playing_surface',
+        x: 0,
+        y: 0,
+        width: 60,
+        height: 40,
+        rotation: 0,
+        shape: 'rect',
+        materialId: null,
+        materialName: 'Synthetic Turf',
+        unitPrice: 38,
+        quantityFactor: 1,
+        label: 'Football Pitch Surface',
+      },
+      {
+        id: generateElementId(),
+        type: 'goal',
+        x: 0.2,
+        y: 17.5,
+        width: 1.5,
+        height: 5,
+        rotation: 0,
+        shape: 'rect',
+        materialId: null,
+        materialName: 'Aluminum Goal Frame',
+        unitPrice: 1850,
+        quantityFactor: 1,
+        label: 'West Goal',
+      },
+      {
+        id: generateElementId(),
+        type: 'goal',
+        x: 58.3,
+        y: 17.5,
+        width: 1.5,
+        height: 5,
+        rotation: 180,
+        shape: 'rect',
+        materialId: null,
+        materialName: 'Aluminum Goal Frame',
+        unitPrice: 1850,
+        quantityFactor: 1,
+        label: 'East Goal',
+      },
+    ],
+  },
+  volleyball: {
+    id: 'volleyball',
+    label: 'Volleyball',
+    description: 'Court surface with center net and support posts',
+    defaultDimensionsLabel: '18 m × 9 m',
+    buildElements: () => [
+      {
+        id: generateElementId(),
+        type: 'playing_surface',
+        x: 0,
+        y: 0,
+        width: 18,
+        height: 9,
+        rotation: 0,
+        shape: 'rect',
+        materialId: null,
+        materialName: 'Modular Sport Tile',
+        unitPrice: 42,
+        quantityFactor: 1,
+        label: 'Volleyball Court Surface',
+      },
+      {
+        id: generateElementId(),
+        type: 'net',
+        x: 8.85,
+        y: -0.25,
+        width: 0.3,
+        height: 9.5,
+        rotation: 0,
+        shape: 'rect',
+        materialId: null,
+        materialName: 'Competition Net',
+        unitPrice: 650,
+        quantityFactor: 1,
+        label: 'Center Net',
+      },
+      {
+        id: generateElementId(),
+        type: 'post',
+        x: 8.8,
+        y: -0.7,
+        width: 0.4,
+        height: 0.4,
+        rotation: 0,
+        shape: 'circle',
+        materialId: null,
+        materialName: 'Steel Net Post',
+        unitPrice: 320,
+        quantityFactor: 1,
+        label: 'North Post',
+      },
+      {
+        id: generateElementId(),
+        type: 'post',
+        x: 8.8,
+        y: 9.3,
+        width: 0.4,
+        height: 0.4,
+        rotation: 0,
+        shape: 'circle',
+        materialId: null,
+        materialName: 'Steel Net Post',
+        unitPrice: 320,
+        quantityFactor: 1,
+        label: 'South Post',
+      },
+    ],
+  },
+  tennis: {
+    id: 'tennis',
+    label: 'Tennis',
+    description: 'Singles/doubles court layout with net and posts',
+    defaultDimensionsLabel: '24 m × 11 m',
+    buildElements: () => [
+      {
+        id: generateElementId(),
+        type: 'playing_surface',
+        x: 0,
+        y: 0,
+        width: 24,
+        height: 11,
+        rotation: 0,
+        shape: 'rect',
+        materialId: null,
+        materialName: 'Cushioned Acrylic Surface',
+        unitPrice: 48,
+        quantityFactor: 1,
+        label: 'Tennis Court Surface',
+      },
+      {
+        id: generateElementId(),
+        type: 'net',
+        x: 11.85,
+        y: -0.25,
+        width: 0.3,
+        height: 11.5,
+        rotation: 0,
+        shape: 'rect',
+        materialId: null,
+        materialName: 'Braided Tennis Net',
+        unitPrice: 700,
+        quantityFactor: 1,
+        label: 'Center Net',
+      },
+      {
+        id: generateElementId(),
+        type: 'post',
+        x: 11.8,
+        y: -0.7,
+        width: 0.4,
+        height: 0.4,
+        rotation: 0,
+        shape: 'circle',
+        materialId: null,
+        materialName: 'Tension Post',
+        unitPrice: 280,
+        quantityFactor: 1,
+        label: 'North Post',
+      },
+      {
+        id: generateElementId(),
+        type: 'post',
+        x: 11.8,
+        y: 11.3,
+        width: 0.4,
+        height: 0.4,
+        rotation: 0,
+        shape: 'circle',
+        materialId: null,
+        materialName: 'Tension Post',
+        unitPrice: 280,
+        quantityFactor: 1,
+        label: 'South Post',
+      },
+    ],
+  },
+  handball: {
+    id: 'handball',
+    label: 'Handball',
+    description: 'Indoor/outdoor court surface with two goals',
+    defaultDimensionsLabel: '40 m × 20 m',
+    buildElements: () => [
+      {
+        id: generateElementId(),
+        type: 'playing_surface',
+        x: 0,
+        y: 0,
+        width: 40,
+        height: 20,
+        rotation: 0,
+        shape: 'rect',
+        materialId: null,
+        materialName: 'Polyurethane Sport Floor',
+        unitPrice: 44,
+        quantityFactor: 1,
+        label: 'Handball Court Surface',
+      },
+      {
+        id: generateElementId(),
+        type: 'goal',
+        x: 0.2,
+        y: 8.5,
+        width: 1.0,
+        height: 3.0,
+        rotation: 0,
+        shape: 'rect',
+        materialId: null,
+        materialName: 'Handball Goal Frame',
+        unitPrice: 1400,
+        quantityFactor: 1,
+        label: 'West Goal',
+      },
+      {
+        id: generateElementId(),
+        type: 'goal',
+        x: 38.8,
+        y: 8.5,
+        width: 1.0,
+        height: 3.0,
+        rotation: 180,
+        shape: 'rect',
+        materialId: null,
+        materialName: 'Handball Goal Frame',
+        unitPrice: 1400,
+        quantityFactor: 1,
+        label: 'East Goal',
+      },
+    ],
+  },
+  custom: {
+    id: 'custom',
+    label: 'Custom',
+    description: 'Flexible starter playing surface for any layout',
+    defaultDimensionsLabel: '20 m × 12 m',
+    buildElements: () => [
+      {
+        id: generateElementId(),
+        type: 'playing_surface',
+        x: 0,
+        y: 0,
+        width: 20,
+        height: 12,
+        rotation: 0,
+        shape: 'rect',
+        materialId: null,
+        materialName: 'Standard Surface',
+        unitPrice: 30,
+        quantityFactor: 1,
+        label: 'Custom Playing Surface',
+      },
+    ],
+  },
+};
+
+export const SPORT_PRESET_LIST: SportPresetDefinition[] = [
+  SPORT_PRESETS.basketball,
+  SPORT_PRESETS.football,
+  SPORT_PRESETS.volleyball,
+  SPORT_PRESETS.tennis,
+  SPORT_PRESETS.handball,
+  SPORT_PRESETS.custom,
+];
+
+export function createInitialScene(sport: SportPresetId = 'custom'): {
+  version: 1;
+  units: 'metric';
+  gridSize: number;
+  elements: SceneElement[];
+} {
+  const preset = SPORT_PRESETS[sport] ?? SPORT_PRESETS.custom;
+  return {
+    version: 1,
+    units: 'metric',
+    gridSize: 1,
+    elements: preset.buildElements(),
+  };
+}
+
+export function createDefaultElement(
+  type: SceneElementType,
+  centerX: number,
+  centerY: number
+): SceneElement {
+  const defaults: Record<
+    SceneElementType,
+    Omit<SceneElement, 'id' | 'x' | 'y'>
+  > = {
+    playing_surface: {
+      type: 'playing_surface',
+      width: 20,
+      height: 12,
+      rotation: 0,
+      shape: 'rect',
+      materialId: null,
+      materialName: 'Sport Surface',
+      unitPrice: 35,
+      quantityFactor: 1,
+      label: 'Playing Surface',
+    },
+    safety_zone: {
+      type: 'safety_zone',
+      width: 24,
+      height: 16,
+      rotation: 0,
+      shape: 'rect',
+      materialId: null,
+      materialName: 'Safety Buffer Apron',
+      unitPrice: 22,
+      quantityFactor: 1,
+      label: 'Safety Zone',
+    },
+    hoop: {
+      type: 'hoop',
+      width: 1.6,
+      height: 1.8,
+      rotation: 0,
+      shape: 'rect',
+      materialId: null,
+      materialName: 'Basketball Hoop',
+      unitPrice: 1200,
+      quantityFactor: 1,
+      label: 'Hoop',
+    },
+    goal: {
+      type: 'goal',
+      width: 1.5,
+      height: 4.0,
+      rotation: 0,
+      shape: 'rect',
+      materialId: null,
+      materialName: 'Goal Frame',
+      unitPrice: 1600,
+      quantityFactor: 1,
+      label: 'Goal',
+    },
+    post: {
+      type: 'post',
+      width: 0.5,
+      height: 0.5,
+      rotation: 0,
+      shape: 'circle',
+      materialId: null,
+      materialName: 'Support Post',
+      unitPrice: 300,
+      quantityFactor: 1,
+      label: 'Post',
+    },
+    net: {
+      type: 'net',
+      width: 0.35,
+      height: 9.5,
+      rotation: 0,
+      shape: 'rect',
+      materialId: null,
+      materialName: 'Sports Net',
+      unitPrice: 650,
+      quantityFactor: 1,
+      label: 'Net',
+    },
+    custom: {
+      type: 'custom',
+      width: 4,
+      height: 3,
+      rotation: 0,
+      shape: 'rect',
+      materialId: null,
+      materialName: 'Custom Element',
+      unitPrice: 25,
+      quantityFactor: 1,
+      label: 'Custom Rectangle',
+    },
+  };
+
+  const spec = defaults[type];
+  return {
+    id: generateElementId(),
+    x: Number((centerX - spec.width / 2).toFixed(2)),
+    y: Number((centerY - spec.height / 2).toFixed(2)),
+    ...spec,
+  };
+}

@@ -1,0 +1,284 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Authenticated user profile synchronized from Google Sign-In.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID matching the document ID."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 254,
+          "description": "User email address from Google Sign-In."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "User display name."
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 35,
+          "description": "BCP-47 locale identifier."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when user record was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when user record was last updated."
+        }
+      },
+      "required": ["uid", "email", "displayName", "locale", "createdAt"]
+    },
+    "Organization": {
+      "title": "Organization",
+      "description": "Shared workspace organization owned by a user.",
+      "type": "object",
+      "properties": {
+        "orgId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Organization document ID."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Display name of the organization."
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the organization creator and owner."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the organization was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the organization was updated."
+        }
+      },
+      "required": ["orgId", "name", "ownerId", "createdAt"]
+    },
+    "Membership": {
+      "title": "Membership",
+      "description": "Organization membership linking a user to an organization with an RBAC role. Document ID is deterministic: {orgId}_{userId}.",
+      "type": "object",
+      "properties": {
+        "membershipId": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 257,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Deterministic membership ID ({orgId}_{userId})."
+        },
+        "orgId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Parent organization ID."
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Member user UID."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["owner", "admin", "manager", "collaborator"],
+          "description": "Organization member role."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Non-PII display label for the member."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when membership was created."
+        }
+      },
+      "required": ["membershipId", "orgId", "userId", "role"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "Email invitation to join an organization (stored in Firestore without sending email).",
+      "type": "object",
+      "properties": {
+        "invitationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Invitation document ID."
+        },
+        "orgId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Target organization ID."
+        },
+        "orgName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Organization display name for invitee view."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 254,
+          "description": "Lowercased email address of the invited user."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "manager", "collaborator"],
+          "description": "Assigned role upon acceptance."
+        },
+        "invitedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the owner or admin who created the invitation."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "revoked"],
+          "description": "Current invitation lifecycle status."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when invitation was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when invitation was updated."
+        }
+      },
+      "required": ["invitationId", "orgId", "orgName", "email", "role", "invitedBy", "status", "createdAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Workspace-scoped project container for sports, house, or furniture modules.",
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Project document ID."
+        },
+        "ownerType": {
+          "type": "string",
+          "enum": ["user", "org"],
+          "description": "Whether the project belongs to a personal user workspace or an organization."
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID (when ownerType is user) or orgId (when ownerType is org)."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Project container name."
+        },
+        "module": {
+          "type": "string",
+          "enum": ["sports", "house", "furniture"],
+          "description": "Target project module type."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "archived"],
+          "description": "Project lifecycle status."
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the user who created the project."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the project was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the project was last updated."
+        },
+        "sport": {
+          "type": "string",
+          "enum": ["basketball", "football", "volleyball", "tennis", "handball", "custom"],
+          "description": "Initial sport preset selected for sports module projects."
+        },
+        "scene": {
+          "type": "object",
+          "description": "2D sports ground scene payload (version, units, gridSize, elements, updatedAt)."
+        }
+      },
+      "required": ["projectId", "ownerType", "ownerId", "name", "module", "status", "createdBy", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Private user profiles isolated to the owning user."
+    },
+    "/organizations/{orgId}": {
+      "schema": { "$ref": "#/entities/Organization" },
+      "description": "Organization workspaces."
+    },
+    "/memberships/{membershipId}": {
+      "schema": { "$ref": "#/entities/Membership" },
+      "description": "Deterministic organization memberships ({orgId}_{userId})."
+    },
+    "/invitations/{invitationId}": {
+      "schema": { "$ref": "#/entities/Invitation" },
+      "description": "Pending and resolved organization invitations by email."
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Projects scoped to personal users or organizations."
+    }
+  }
+}

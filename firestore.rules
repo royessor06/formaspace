@@ -1,0 +1,365 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default deny everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() &&
+        request.auth.token.email_verified == true &&
+        'email' in request.auth.token &&
+        request.auth.token.email is string;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidMembershipId(id) {
+      return id is string && id.size() >= 3 && id.size() <= 257 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidInvitationId(id) {
+      return id is string && id.size() >= 3 && id.size() <= 384 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOrgMember(orgId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/memberships/$(orgId + '_' + request.auth.uid));
+    }
+
+    function getOrgRole(orgId) {
+      return get(/databases/$(database)/documents/memberships/$(orgId + '_' + request.auth.uid)).data.role;
+    }
+
+    function isOrgAdminOrOwner(orgId) {
+      return isOrgMember(orgId) && (getOrgRole(orgId) in ['owner', 'admin']);
+    }
+
+    function emailSlug(email) {
+      return email.lower().replace('[^a-z0-9]', '_');
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUser(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'locale', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'locale', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid == userId && isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.locale is string && data.locale.size() >= 2 && data.locale.size() <= 35 &&
+        data.createdAt is timestamp &&
+        (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidOrganization(data, orgId) {
+      return data.keys().hasAll(['orgId', 'name', 'ownerId', 'createdAt']) &&
+        data.keys().hasOnly(['orgId', 'name', 'ownerId', 'createdAt', 'updatedAt']) &&
+        data.orgId is string && data.orgId == orgId && isValidId(data.orgId) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        data.ownerId is string && isValidId(data.ownerId) &&
+        data.createdAt is timestamp &&
+        (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidMembership(data, membershipId) {
+      return data.keys().hasAll(['membershipId', 'orgId', 'userId', 'role']) &&
+        data.keys().hasOnly(['membershipId', 'orgId', 'userId', 'role', 'displayName', 'createdAt']) &&
+        data.membershipId is string && data.membershipId == membershipId && isValidMembershipId(data.membershipId) &&
+        isValidId(data.orgId) && isValidId(data.userId) &&
+        data.membershipId == (data.orgId + '_' + data.userId) &&
+        data.role in ['owner', 'admin', 'manager', 'collaborator'] &&
+        (!('displayName' in data) || (data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120)) &&
+        (!('createdAt' in data) || data.createdAt is timestamp);
+    }
+
+    function isValidInvitation(data, invitationId) {
+      return data.keys().hasAll(['invitationId', 'orgId', 'orgName', 'email', 'role', 'invitedBy', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['invitationId', 'orgId', 'orgName', 'email', 'role', 'invitedBy', 'status', 'createdAt', 'updatedAt']) &&
+        data.invitationId is string && data.invitationId == invitationId && isValidInvitationId(data.invitationId) &&
+        isValidId(data.orgId) &&
+        data.orgName is string && data.orgName.size() >= 1 && data.orgName.size() <= 100 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.role in ['admin', 'manager', 'collaborator'] &&
+        data.invitedBy is string && isValidId(data.invitedBy) &&
+        data.status in ['pending', 'accepted', 'revoked'] &&
+        data.createdAt is timestamp &&
+        (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidSceneElement(el) {
+      return el is map &&
+        el.keys().hasAll(['id', 'type', 'x', 'y', 'width', 'height', 'rotation', 'shape', 'materialId', 'materialName', 'unitPrice', 'quantityFactor', 'label']) &&
+        el.keys().hasOnly(['id', 'type', 'x', 'y', 'width', 'height', 'rotation', 'shape', 'materialId', 'materialName', 'unitPrice', 'quantityFactor', 'label']) &&
+        el.id is string && el.id.size() >= 1 && el.id.size() <= 64 &&
+        el.type in ['playing_surface', 'safety_zone', 'hoop', 'goal', 'post', 'net', 'custom'] &&
+        el.x is number && el.y is number &&
+        el.width is number && el.width > 0 && el.width <= 1000 &&
+        el.height is number && el.height > 0 && el.height <= 1000 &&
+        el.rotation is number && el.rotation >= 0 && el.rotation < 360 &&
+        el.shape in ['rect', 'circle'] &&
+        (el.materialId == null || (el.materialId is string && el.materialId.size() <= 128)) &&
+        el.materialName is string && el.materialName.size() <= 120 &&
+        el.unitPrice is number && el.unitPrice >= 0 && el.unitPrice <= 10000000 &&
+        el.quantityFactor is number && el.quantityFactor >= 0 && el.quantityFactor <= 100000 &&
+        el.label is string && el.label.size() <= 120;
+    }
+
+    function isValidScene(scene) {
+      return scene is map &&
+        scene.keys().hasAll(['version', 'units', 'gridSize', 'elements', 'updatedAt']) &&
+        scene.keys().hasOnly(['version', 'units', 'gridSize', 'elements', 'updatedAt']) &&
+        scene.version == 1 &&
+        scene.units in ['metric', 'imperial'] &&
+        scene.gridSize is number && scene.gridSize >= 0.1 && scene.gridSize <= 10 &&
+        scene.elements is list && scene.elements.size() <= 200 &&
+        (scene.elements.size() == 0 || isValidSceneElement(scene.elements[0])) &&
+        scene.updatedAt is timestamp;
+    }
+
+    function isValidProject(data, projectId) {
+      return data.keys().hasAll(['projectId', 'ownerType', 'ownerId', 'name', 'module', 'status', 'createdBy', 'createdAt']) &&
+        data.keys().hasOnly(['projectId', 'ownerType', 'ownerId', 'name', 'module', 'status', 'createdBy', 'createdAt', 'updatedAt', 'sport', 'scene']) &&
+        data.projectId is string && data.projectId == projectId && isValidId(data.projectId) &&
+        data.ownerType in ['user', 'org'] &&
+        data.ownerId is string && isValidId(data.ownerId) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.module in ['sports', 'house', 'furniture'] &&
+        data.status in ['active', 'archived'] &&
+        data.createdBy is string && isValidId(data.createdBy) &&
+        data.createdAt is timestamp &&
+        (!('updatedAt' in data) || data.updatedAt is timestamp) &&
+        (!('sport' in data) || data.sport in ['basketball', 'football', 'volleyball', 'tennis', 'handball', 'custom']) &&
+        (!('scene' in data) || (data.module == 'sports' && isValidScene(data.scene)));
+    }
+
+    function canReadProject(data) {
+      return (data.ownerType == 'user' && data.ownerId == request.auth.uid) ||
+        (data.ownerType == 'org' && isOrgMember(data.ownerId));
+    }
+
+    // --- Collection Rules ---
+
+    // Users (PII isolated strictly to owning user)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if false;
+      allow create: if isVerifiedUser() && isValidId(userId) &&
+        request.auth.uid == userId &&
+        isValidUser(incoming(), userId) &&
+        incoming().createdAt == request.time &&
+        !('updatedAt' in incoming());
+      allow update: if isVerifiedUser() && isValidId(userId) &&
+        request.auth.uid == userId &&
+        isValidUser(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['email', 'displayName', 'locale', 'updatedAt']) &&
+        incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // Organizations
+    match /organizations/{orgId} {
+      allow get: if isSignedIn() && isValidId(orgId) &&
+        (resource.data.ownerId == request.auth.uid || isOrgMember(orgId));
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser() && isValidId(orgId) &&
+        isValidOrganization(incoming(), orgId) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        !('updatedAt' in incoming()) &&
+        existsAfter(/databases/$(database)/documents/memberships/$(orgId + '_' + request.auth.uid)) &&
+        getAfter(/databases/$(database)/documents/memberships/$(orgId + '_' + request.auth.uid)).data.role == 'owner';
+      allow update: if isVerifiedUser() && isValidId(orgId) &&
+        isValidOrganization(incoming(), orgId) &&
+        isOrgAdminOrOwner(orgId) &&
+        incoming().orgId == existing().orgId &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'updatedAt']) &&
+        incoming().updatedAt == request.time;
+      allow delete: if isVerifiedUser() && isValidId(orgId) &&
+        existing().ownerId == request.auth.uid;
+    }
+
+    // Memberships (deterministic ID: {orgId}_{userId})
+    match /memberships/{membershipId} {
+      allow get: if isSignedIn() && isValidMembershipId(membershipId) &&
+        (resource.data.userId == request.auth.uid || isOrgMember(resource.data.orgId));
+      allow list: if isSignedIn() &&
+        (resource.data.userId == request.auth.uid || isOrgMember(resource.data.orgId));
+      allow create: if isVerifiedUser() && isValidMembershipId(membershipId) &&
+        isValidMembership(incoming(), membershipId) &&
+        (!('createdAt' in incoming()) || incoming().createdAt == request.time) &&
+        (
+          // Action 1: Org creator bootstraps their owner membership atomically
+          (
+            incoming().userId == request.auth.uid &&
+            incoming().role == 'owner' &&
+            existsAfter(/databases/$(database)/documents/organizations/$(incoming().orgId)) &&
+            getAfter(/databases/$(database)/documents/organizations/$(incoming().orgId)).data.ownerId == request.auth.uid
+          ) ||
+          // Action 2: Org owner or admin adds a non-owner member directly
+          (
+            isOrgAdminOrOwner(incoming().orgId) &&
+            incoming().role != 'owner' &&
+            exists(/databases/$(database)/documents/organizations/$(incoming().orgId))
+          ) ||
+          // Action 3: Invited user accepts their pending deterministic invitation
+          (
+            incoming().userId == request.auth.uid &&
+            incoming().role != 'owner' &&
+            exists(/databases/$(database)/documents/organizations/$(incoming().orgId)) &&
+            exists(/databases/$(database)/documents/invitations/$(incoming().orgId + '__' + emailSlug(request.auth.token.email))) &&
+            get(/databases/$(database)/documents/invitations/$(incoming().orgId + '__' + emailSlug(request.auth.token.email))).data.status == 'pending' &&
+            get(/databases/$(database)/documents/invitations/$(incoming().orgId + '__' + emailSlug(request.auth.token.email))).data.email == request.auth.token.email.lower() &&
+            get(/databases/$(database)/documents/invitations/$(incoming().orgId + '__' + emailSlug(request.auth.token.email))).data.role == incoming().role
+          )
+        );
+      allow update: if isVerifiedUser() && isValidMembershipId(membershipId) &&
+        isValidMembership(incoming(), membershipId) &&
+        isOrgAdminOrOwner(existing().orgId) &&
+        existing().role != 'owner' &&
+        incoming().role in ['admin', 'manager', 'collaborator'] &&
+        incoming().membershipId == existing().membershipId &&
+        incoming().orgId == existing().orgId &&
+        incoming().userId == existing().userId &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['role']);
+      allow delete: if isVerifiedUser() && isValidMembershipId(membershipId) &&
+        existing().role != 'owner' &&
+        (isOrgAdminOrOwner(existing().orgId) || existing().userId == request.auth.uid);
+    }
+
+    // Invitations (deterministic ID: {orgId}__{emailSlug})
+    match /invitations/{invitationId} {
+      allow get: if isVerifiedUser() && isValidInvitationId(invitationId) &&
+        (
+          isOrgAdminOrOwner(resource.data.orgId) ||
+          resource.data.email == request.auth.token.email.lower()
+        );
+      allow list: if isVerifiedUser() &&
+        (
+          resource.data.email == request.auth.token.email.lower() ||
+          isOrgAdminOrOwner(resource.data.orgId)
+        );
+      allow create: if isVerifiedUser() && isValidInvitationId(invitationId) &&
+        isValidInvitation(incoming(), invitationId) &&
+        invitationId == (incoming().orgId + '__' + emailSlug(incoming().email)) &&
+        incoming().invitedBy == request.auth.uid &&
+        incoming().status == 'pending' &&
+        incoming().createdAt == request.time &&
+        !('updatedAt' in incoming()) &&
+        exists(/databases/$(database)/documents/organizations/$(incoming().orgId)) &&
+        isOrgAdminOrOwner(incoming().orgId);
+      allow update: if isVerifiedUser() && isValidInvitationId(invitationId) &&
+        isValidInvitation(incoming(), invitationId) &&
+        incoming().invitationId == existing().invitationId &&
+        incoming().orgId == existing().orgId &&
+        incoming().orgName == existing().orgName &&
+        incoming().email == existing().email &&
+        incoming().invitedBy == existing().invitedBy &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          // Action 1: Owner/Admin revokes pending invitation or re-invites a revoked invitation
+          (
+            isOrgAdminOrOwner(existing().orgId) &&
+            existing().status in ['pending', 'revoked'] &&
+            incoming().status in ['pending', 'revoked'] &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'role', 'updatedAt'])
+          ) ||
+          // Action 2: Invitee accepts pending invitation atomically with membership creation
+          (
+            existing().status == 'pending' &&
+            existing().email == request.auth.token.email.lower() &&
+            incoming().status == 'accepted' &&
+            incoming().role == existing().role &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+            existsAfter(/databases/$(database)/documents/memberships/$(existing().orgId + '_' + request.auth.uid))
+          )
+        );
+      allow delete: if isVerifiedUser() && isValidInvitationId(invitationId) &&
+        isOrgAdminOrOwner(existing().orgId);
+    }
+
+    // Projects (personal or org-scoped containers)
+    match /projects/{projectId} {
+      allow get: if isSignedIn() && isValidId(projectId) && canReadProject(resource.data);
+      allow list: if isSignedIn() && canReadProject(resource.data);
+      allow create: if isVerifiedUser() && isValidId(projectId) &&
+        isValidProject(incoming(), projectId) &&
+        incoming().createdBy == request.auth.uid &&
+        incoming().status == 'active' &&
+        incoming().createdAt == request.time &&
+        !('updatedAt' in incoming()) &&
+        (!('scene' in incoming()) || incoming().scene.updatedAt == request.time) &&
+        (
+          (incoming().ownerType == 'user' && incoming().ownerId == request.auth.uid) ||
+          (
+            incoming().ownerType == 'org' &&
+            exists(/databases/$(database)/documents/organizations/$(incoming().ownerId)) &&
+            isOrgMember(incoming().ownerId)
+          )
+        );
+      allow update: if isVerifiedUser() && isValidId(projectId) &&
+        isValidProject(incoming(), projectId) &&
+        canReadProject(existing()) &&
+        incoming().projectId == existing().projectId &&
+        incoming().ownerType == existing().ownerType &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().module == existing().module &&
+        incoming().createdBy == existing().createdBy &&
+        incoming().createdAt == existing().createdAt &&
+        (!('sport' in existing()) ? !('sport' in incoming()) : ('sport' in incoming() && incoming().sport == existing().sport)) &&
+        incoming().updatedAt == request.time &&
+        (
+          // Action 1: Rename project
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'updatedAt']) ||
+          // Action 2: Archive or Restore project
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) ||
+          // Action 3: Save sports ground scene
+          (
+            existing().module == 'sports' &&
+            incoming().scene.updatedAt == request.time &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['scene', 'updatedAt'])
+          ) ||
+          // Action 4: Rename + Save sports ground scene together
+          (
+            existing().module == 'sports' &&
+            incoming().scene.updatedAt == request.time &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'scene', 'updatedAt'])
+          )
+        );
+      allow delete: if isVerifiedUser() && isValidId(projectId) &&
+        (
+          (existing().ownerType == 'user' && existing().ownerId == request.auth.uid) ||
+          (
+            existing().ownerType == 'org' &&
+            isOrgMember(existing().ownerId) &&
+            (
+              isOrgAdminOrOwner(existing().ownerId) ||
+              getOrgRole(existing().ownerId) == 'manager' ||
+              existing().createdBy == request.auth.uid
+            )
+          )
+        );
+    }
+  }
+}
