@@ -254,6 +254,10 @@
         "scene": {
           "type": "object",
           "description": "2D sports ground scene payload (version, units, gridSize, elements, updatedAt)."
+        },
+        "floorPlan": {
+          "type": "object",
+          "description": "2D house floor plan payload (version, units, gridSize, site, floors, updatedAt)."
         }
       },
       "required": ["projectId", "ownerType", "ownerId", "name", "module", "status", "createdBy", "createdAt"]

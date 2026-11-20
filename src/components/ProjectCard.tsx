@@ -205,7 +205,9 @@ export function ProjectCard({
               onClick={() => onOpen(project)}
               className="text-xs font-medium text-slate-700 hover:text-slate-900 transition-colors whitespace-nowrap focus-visible:outline-2 focus-visible:outline-blue-600 rounded px-1 py-0.5"
             >
-              {project.module === 'sports' ? 'Open editor' : 'Open container'}
+              {project.module === 'sports' || project.module === 'house'
+                ? 'Open editor'
+                : 'Open container'}
             </button>
 
             <div className="flex items-center gap-1">

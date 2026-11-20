@@ -1,6 +1,7 @@
 import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { handleFirestoreError, OperationType } from '../firestoreErrors';
+import { logAndAssertUpdatePayload } from '../payloadDiagnostics';
 import type { ProjectDoc } from '../../types/models';
 import type { SceneElement, SceneUnits } from './types';
 
@@ -38,7 +39,14 @@ export async function fetchProjectSceneDoc(projectId: string): Promise<ProjectDo
   try {
     const snap = await getDoc(doc(db, 'projects', projectId));
     if (!snap.exists()) return null;
-    return snap.data() as ProjectDoc;
+    const projectData = snap.data() as ProjectDoc;
+    console.log(`[Firestore Diagnostic][fetchProjectSceneDoc] projects/${projectId}`, {
+      ownerType: projectData.ownerType,
+      ownerId: projectData.ownerId,
+      module: projectData.module,
+      createdBy: projectData.createdBy,
+    });
+    return projectData;
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, path);
   }
@@ -57,17 +65,21 @@ export async function saveProjectScene(
   const sanitizedElements = sanitizeSceneElements(scene.elements);
   const gridSize = Number(clampNumber(scene.gridSize, 0.1, 10, 1).toFixed(2));
 
-  try {
-    await updateDoc(doc(db, 'projects', projectId), {
-      scene: {
-        version: 1,
-        units: scene.units === 'imperial' ? 'imperial' : 'metric',
-        gridSize,
-        elements: sanitizedElements,
-        updatedAt: serverTimestamp(),
-      },
+  const fullPayload: Record<string, unknown> = {
+    scene: {
+      version: 1,
+      units: scene.units === 'imperial' ? 'imperial' : 'metric',
+      gridSize,
+      elements: sanitizedElements,
       updatedAt: serverTimestamp(),
-    });
+    },
+    updatedAt: serverTimestamp(),
+  };
+
+  logAndAssertUpdatePayload('saveProjectScene', projectId, 'scene', fullPayload);
+
+  try {
+    await updateDoc(doc(db, 'projects', projectId), fullPayload);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }

@@ -1,6 +1,5 @@
 import { Trash2 } from 'lucide-react';
 import {
-  convertLength,
   elementArea,
   elementCost,
   elementPerimeter,
@@ -8,13 +7,13 @@ import {
   formatLength,
   isSurfaceElementType,
   materialQuantity,
-  toMeters,
 } from '../../lib/sports/calculations';
 import type {
   SceneElement,
   SceneElementShape,
   SceneUnits,
 } from '../../lib/sports/types';
+import { PropertiesField } from '../shared/PropertiesField';
 
 interface PropertiesPanelProps {
   selectedElement: SceneElement | null;
@@ -33,8 +32,6 @@ export function PropertiesPanel({
   onUpdateElement,
   onDeleteElement,
 }: PropertiesPanelProps) {
-  const unitSuffix = units === 'imperial' ? 'ft' : 'm';
-
   if (!selectedElement) {
     return (
       <div className="p-4 space-y-4">
@@ -90,28 +87,6 @@ export function PropertiesPanel({
     selectedElement.type === 'playing_surface' ||
     selectedElement.type === 'safety_zone';
 
-  const displayWidth = Number(
-    convertLength(selectedElement.width, units).toFixed(2)
-  );
-  const displayHeight = Number(
-    convertLength(selectedElement.height, units).toFixed(2)
-  );
-
-  const handleDimensionChange = (field: 'width' | 'height', rawValue: string) => {
-    const parsed = Number(rawValue);
-    if (!Number.isFinite(parsed) || parsed <= 0) return;
-    const meters = Math.min(1000, Math.max(0.1, toMeters(parsed, units)));
-    const roundedMeters = Number(meters.toFixed(3));
-    if (selectedElement.shape === 'circle') {
-      onUpdateElement(selectedElement.id, {
-        width: roundedMeters,
-        height: roundedMeters,
-      });
-    } else {
-      onUpdateElement(selectedElement.id, { [field]: roundedMeters });
-    }
-  };
-
   const handleRotationChange = (rawValue: string) => {
     const parsed = Number(rawValue);
     if (!Number.isFinite(parsed)) return;
@@ -135,66 +110,46 @@ export function PropertiesPanel({
         </span>
       </div>
 
-      {/* Label */}
-      <div>
-        <label
-          htmlFor="prop-label"
-          className="block text-xs font-medium text-slate-700 mb-1"
-        >
-          Label
-        </label>
-        <input
-          id="prop-label"
-          type="text"
-          value={selectedElement.label}
-          maxLength={120}
-          onChange={(e) =>
-            onUpdateElement(selectedElement.id, { label: e.target.value })
+      <PropertiesField
+        id="prop-label"
+        label="Label"
+        type="text"
+        value={selectedElement.label}
+        maxLength={120}
+        onChange={(value) => onUpdateElement(selectedElement.id, { label: value })}
+      />
+
+      <div className="grid grid-cols-2 gap-2.5">
+        <PropertiesField
+          id="prop-width"
+          label={selectedElement.shape === 'circle' ? 'Diameter' : 'Width'}
+          type="length"
+          meters={selectedElement.width}
+          units={units}
+          minMeters={0.1}
+          onMetersChange={(nextMeters) =>
+            onUpdateElement(
+              selectedElement.id,
+              selectedElement.shape === 'circle'
+                ? { width: nextMeters, height: nextMeters }
+                : { width: nextMeters }
+            )
           }
-          className="w-full px-3 py-1.5 text-xs text-slate-900 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-blue-600"
+        />
+        <PropertiesField
+          id="prop-height"
+          label="Height"
+          type="length"
+          meters={selectedElement.height}
+          units={units}
+          minMeters={0.1}
+          disabled={selectedElement.shape === 'circle'}
+          onMetersChange={(nextMeters) =>
+            onUpdateElement(selectedElement.id, { height: nextMeters })
+          }
         />
       </div>
 
-      {/* Dimensions */}
-      <div className="grid grid-cols-2 gap-2.5">
-        <div>
-          <label
-            htmlFor="prop-width"
-            className="block text-xs font-medium text-slate-700 mb-1"
-          >
-            {selectedElement.shape === 'circle' ? `Diameter (${unitSuffix})` : `Width (${unitSuffix})`}
-          </label>
-          <input
-            id="prop-width"
-            type="number"
-            step="0.1"
-            min="0.1"
-            value={displayWidth}
-            onChange={(e) => handleDimensionChange('width', e.target.value)}
-            className="w-full px-2.5 py-1.5 text-xs font-mono tabular-nums text-slate-900 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-blue-600"
-          />
-        </div>
-        <div>
-          <label
-            htmlFor="prop-height"
-            className="block text-xs font-medium text-slate-700 mb-1"
-          >
-            Height ({unitSuffix})
-          </label>
-          <input
-            id="prop-height"
-            type="number"
-            step="0.1"
-            min="0.1"
-            disabled={selectedElement.shape === 'circle'}
-            value={displayHeight}
-            onChange={(e) => handleDimensionChange('height', e.target.value)}
-            className="w-full px-2.5 py-1.5 text-xs font-mono tabular-nums text-slate-900 bg-white border border-slate-200 rounded-lg disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-600"
-          />
-        </div>
-      </div>
-
-      {/* Rotation */}
       <div>
         <div className="flex items-center justify-between mb-1">
           <label
@@ -229,7 +184,6 @@ export function PropertiesPanel({
         </div>
       </div>
 
-      {/* Shape (only for surfaces / safety zones) */}
       {canToggleShape && (
         <div>
           <span className="block text-xs font-medium text-slate-700 mb-1">
@@ -261,77 +215,48 @@ export function PropertiesPanel({
         </div>
       )}
 
-      {/* Material & Pricing */}
       <div className="pt-3 border-t border-slate-100 space-y-3">
-        <div>
-          <label
-            htmlFor="prop-material"
-            className="block text-xs font-medium text-slate-700 mb-1"
-          >
-            Material name
-          </label>
-          <input
-            id="prop-material"
-            type="text"
-            maxLength={120}
-            value={selectedElement.materialName}
-            onChange={(e) =>
-              onUpdateElement(selectedElement.id, {
-                materialName: e.target.value,
-              })
-            }
-            className="w-full px-3 py-1.5 text-xs text-slate-900 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-blue-600"
-          />
-        </div>
+        <PropertiesField
+          id="prop-material"
+          label="Material name"
+          type="text"
+          maxLength={120}
+          value={selectedElement.materialName}
+          onChange={(value) =>
+            onUpdateElement(selectedElement.id, { materialName: value })
+          }
+        />
 
         <div className="grid grid-cols-2 gap-2.5">
-          <div>
-            <label
-              htmlFor="prop-unit-price"
-              className="block text-xs font-medium text-slate-700 mb-1"
-            >
-              Price ({isSurface ? 'per m²' : 'per unit'})
-            </label>
-            <input
-              id="prop-unit-price"
-              type="number"
-              min={0}
-              step="0.5"
-              value={selectedElement.unitPrice}
-              onChange={(e) => {
-                const parsed = Number(e.target.value);
-                if (!Number.isFinite(parsed) || parsed < 0) return;
-                onUpdateElement(selectedElement.id, { unitPrice: parsed });
-              }}
-              className="w-full px-2.5 py-1.5 text-xs font-mono tabular-nums text-slate-900 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-blue-600"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="prop-qty-factor"
-              className="block text-xs font-medium text-slate-700 mb-1"
-            >
-              {isSurface ? 'Qty factor' : 'Unit count'}
-            </label>
-            <input
-              id="prop-qty-factor"
-              type="number"
-              min={0}
-              step={isSurface ? '0.1' : '1'}
-              value={selectedElement.quantityFactor}
-              onChange={(e) => {
-                const parsed = Number(e.target.value);
-                if (!Number.isFinite(parsed) || parsed < 0) return;
-                onUpdateElement(selectedElement.id, { quantityFactor: parsed });
-              }}
-              className="w-full px-2.5 py-1.5 text-xs font-mono tabular-nums text-slate-900 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-blue-600"
-            />
-          </div>
+          <PropertiesField
+            id="prop-unit-price"
+            label={`Price (${isSurface ? 'per m²' : 'per unit'})`}
+            type="number"
+            min={0}
+            step="0.5"
+            value={selectedElement.unitPrice}
+            onChange={(raw) => {
+              const parsed = Number(raw);
+              if (!Number.isFinite(parsed) || parsed < 0) return;
+              onUpdateElement(selectedElement.id, { unitPrice: parsed });
+            }}
+          />
+          <PropertiesField
+            id="prop-qty-factor"
+            label={isSurface ? 'Qty factor' : 'Unit count'}
+            type="number"
+            min={0}
+            step={isSurface ? '0.1' : '1'}
+            value={selectedElement.quantityFactor}
+            onChange={(raw) => {
+              const parsed = Number(raw);
+              if (!Number.isFinite(parsed) || parsed < 0) return;
+              onUpdateElement(selectedElement.id, { quantityFactor: parsed });
+            }}
+          />
         </div>
       </div>
 
-      {/* Live measurements */}
       <dl className="pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
         <div>
           <dt className="text-[11px] text-slate-500">Area</dt>

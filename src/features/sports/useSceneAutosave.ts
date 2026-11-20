@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { saveProjectScene } from '../../lib/sports/sceneService';
+import { useCallback, useMemo } from 'react';
+import { sanitizeSceneElements } from '../../lib/sports/sceneService';
 import type { SceneElement, SceneUnits } from '../../lib/sports/types';
+import { useDebouncedFirestoreSave } from '../shared/useDebouncedFirestoreSave';
 
 export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
 
@@ -21,96 +22,52 @@ export function useSceneAutosave({
   elements,
   onError,
 }: UseSceneAutosaveOptions) {
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
-  const lastSavedSignatureRef = useRef<string>('');
-  const timerRef = useRef<number | null>(null);
-  const inFlightRef = useRef<boolean>(false);
-  const onErrorRef = useRef(onError);
-  onErrorRef.current = onError;
+  const sanitizedPayload = useMemo(() => {
+    const safeGrid = Number.isFinite(gridSize)
+      ? Number(Math.min(10, Math.max(0.1, gridSize)).toFixed(2))
+      : 1;
+    return {
+      version: 1 as const,
+      units: units === 'imperial' ? ('imperial' as const) : ('metric' as const),
+      gridSize: safeGrid,
+      elements: sanitizeSceneElements(elements),
+    };
+  }, [units, gridSize, elements]);
 
-  const currentPayload = {
-    version: 1 as const,
-    units,
-    gridSize,
-    elements,
-  };
-  const currentSignature = JSON.stringify(currentPayload);
+  const { status, hasUnsavedChanges, hasError, markBaseline, flushSave } =
+    useDebouncedFirestoreSave(projectId, 'scene', sanitizedPayload, 800, {
+      enabled: hydrated,
+      onError,
+    });
 
   const markHydratedBaseline = useCallback(
-    (baseline: { version: 1; units: SceneUnits; gridSize: number; elements: SceneElement[] }) => {
-      lastSavedSignatureRef.current = JSON.stringify(baseline);
-      setSaveStatus('saved');
+    (baseline: {
+      version: 1;
+      units: SceneUnits;
+      gridSize: number;
+      elements: SceneElement[];
+    }) => {
+      markBaseline({
+        version: 1 as const,
+        units: baseline.units === 'imperial' ? 'imperial' : 'metric',
+        gridSize: Number(Math.min(10, Math.max(0.1, baseline.gridSize)).toFixed(2)),
+        elements: sanitizeSceneElements(baseline.elements),
+      });
     },
-    []
+    [markBaseline]
   );
 
-  const flushSave = useCallback(async () => {
-    if (!hydrated) return;
-    if (timerRef.current !== null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    if (currentSignature === lastSavedSignatureRef.current) {
-      setSaveStatus('saved');
-      return;
-    }
-    inFlightRef.current = true;
-    setSaveStatus('saving');
-    try {
-      await saveProjectScene(projectId, currentPayload);
-      lastSavedSignatureRef.current = currentSignature;
-      setSaveStatus('saved');
-    } catch (error) {
-      setSaveStatus('error');
-      onErrorRef.current(error);
-    } finally {
-      inFlightRef.current = false;
-    }
-  }, [hydrated, projectId, currentSignature, currentPayload]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    if (currentSignature === lastSavedSignatureRef.current) {
-      if (!inFlightRef.current) {
-        setSaveStatus('saved');
-      }
-      return;
-    }
-
-    setSaveStatus('unsaved');
-    if (timerRef.current !== null) {
-      window.clearTimeout(timerRef.current);
-    }
-
-    timerRef.current = window.setTimeout(() => {
-      timerRef.current = null;
-      void (async () => {
-        inFlightRef.current = true;
-        setSaveStatus('saving');
-        try {
-          await saveProjectScene(projectId, currentPayload);
-          lastSavedSignatureRef.current = currentSignature;
-          setSaveStatus('saved');
-        } catch (error) {
-          setSaveStatus('error');
-          onErrorRef.current(error);
-        } finally {
-          inFlightRef.current = false;
-        }
-      })();
-    }, 800);
-
-    return () => {
-      if (timerRef.current !== null) {
-        window.clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [hydrated, projectId, currentSignature]);
+  const saveStatus: SaveStatus = hasError
+    ? 'error'
+    : status === 'saving'
+    ? 'saving'
+    : hasUnsavedChanges
+    ? 'unsaved'
+    : 'saved';
 
   return {
     saveStatus,
-    hasUnsavedChanges: saveStatus === 'unsaved' || saveStatus === 'saving',
+    hasUnsavedChanges,
     markHydratedBaseline,
     flushSave,
   };

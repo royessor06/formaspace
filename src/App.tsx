@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import {
-  AlertTriangle,
   FolderKanban,
   Menu,
   Plus,
@@ -48,6 +47,8 @@ import { ProjectCard } from './components/ProjectCard';
 import { CreateProjectModal, ProjectDetailModal } from './components/ProjectModal';
 import { Sidebar } from './components/Sidebar';
 import { ToastProvider, useToast } from './components/ToastProvider';
+import { UnsavedChangesModal } from './features/shared/UnsavedChangesModal';
+import { HouseEditor } from './features/house/HouseEditor';
 import { SportsEditor } from './features/sports/SportsEditor';
 
 type ModuleFilter = 'all' | ProjectModule;
@@ -84,7 +85,7 @@ function WorkspaceApp() {
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<ProjectDoc | null>(null);
-  const [editingSportsProjectId, setEditingSportsProjectId] = useState<string | null>(null);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingFallbackProject, setEditingFallbackProject] = useState<ProjectDoc | null>(null);
   const [pendingNavAction, setPendingNavAction] = useState<(() => void) | null>(null);
 
@@ -126,7 +127,7 @@ function WorkspaceApp() {
         setMyInvitations([]);
         setActiveWorkspace({ type: 'personal' });
         setActiveSection('projects');
-        setEditingSportsProjectId(null);
+        setEditingProjectId(null);
         setEditingFallbackProject(null);
       }
     });
@@ -424,33 +425,35 @@ function WorkspaceApp() {
     );
   };
 
-  const editingSportsProject = useMemo(() => {
-    if (!editingSportsProjectId) return null;
+  const editingProject = useMemo(() => {
+    if (!editingProjectId) return null;
     const live = projects.find(
-      (p) => p.projectId === editingSportsProjectId && p.module === 'sports'
+      (p) =>
+        p.projectId === editingProjectId &&
+        (p.module === 'sports' || p.module === 'house')
     );
     if (live) return live;
-    if (editingFallbackProject?.projectId === editingSportsProjectId) {
+    if (editingFallbackProject?.projectId === editingProjectId) {
       return editingFallbackProject;
     }
     return null;
-  }, [editingSportsProjectId, projects, editingFallbackProject]);
+  }, [editingProjectId, projects, editingFallbackProject]);
 
   const guardNavigation = useCallback(
     (action: () => void) => {
-      if (editingSportsProjectId && unsavedEditorRef.current.hasUnsavedChanges) {
+      if (editingProjectId && unsavedEditorRef.current.hasUnsavedChanges) {
         setPendingNavAction(() => action);
         return;
       }
       action();
     },
-    [editingSportsProjectId]
+    [editingProjectId]
   );
 
   // Action handlers
   const handleSelectWorkspace = (ws: ActiveWorkspace) => {
     guardNavigation(() => {
-      setEditingSportsProjectId(null);
+      setEditingProjectId(null);
       setEditingFallbackProject(null);
       setActiveWorkspace(ws);
       if (ws.type === 'personal' && activeSection === 'members') {
@@ -464,8 +467,8 @@ function WorkspaceApp() {
 
   const handleSelectSection = (section: ActiveSection) => {
     guardNavigation(() => {
-      if (section !== 'projects' || editingSportsProjectId) {
-        setEditingSportsProjectId(null);
+      if (section !== 'projects' || editingProjectId) {
+        setEditingProjectId(null);
         setEditingFallbackProject(null);
       }
       setActiveSection(section);
@@ -550,19 +553,19 @@ function WorkspaceApp() {
         title: 'Project created',
         message: `${name} added to ${activeWorkspaceName}.`,
       });
-      if (module === 'sports') {
+      if (module === 'sports' || module === 'house') {
         setEditingFallbackProject({
           projectId,
           ownerType,
           ownerId,
           name,
-          module: 'sports',
+          module,
           status: 'active',
           createdBy: user.uid,
           createdAt: undefined as unknown as ProjectDoc['createdAt'],
-          sport: sport ?? 'custom',
+          ...(module === 'sports' ? { sport: sport ?? 'custom' } : {}),
         });
-        setEditingSportsProjectId(projectId);
+        setEditingProjectId(projectId);
         setActiveSection('projects');
       }
     } catch (error) {
@@ -788,13 +791,13 @@ function WorkspaceApp() {
               <span aria-hidden="true" className="text-slate-300">
                 /
               </span>
-              {activeSection === 'projects' && editingSportsProject ? (
+              {activeSection === 'projects' && editingProject ? (
                 <>
                   <button
                     type="button"
                     onClick={() =>
                       guardNavigation(() => {
-                        setEditingSportsProjectId(null);
+                        setEditingProjectId(null);
                         setEditingFallbackProject(null);
                       })
                     }
@@ -806,7 +809,7 @@ function WorkspaceApp() {
                     /
                   </span>
                   <h1 className="font-display font-semibold text-slate-900 truncate">
-                    {editingSportsProject.name}
+                    {editingProject.name}
                   </h1>
                 </>
               ) : (
@@ -818,7 +821,7 @@ function WorkspaceApp() {
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            {activeSection === 'projects' && !editingSportsProject && (
+            {activeSection === 'projects' && !editingProject && (
               <button
                 type="button"
                 onClick={() => setCreateProjectOpen(true)}
@@ -852,23 +855,37 @@ function WorkspaceApp() {
         {/* Main viewport */}
         <main
           className={
-            activeSection === 'projects' && editingSportsProject
+            activeSection === 'projects' && editingProject
               ? 'flex-1 min-h-0 flex flex-col'
               : 'flex-1 p-4 sm:p-8'
           }
         >
-          {activeSection === 'projects' && editingSportsProject ? (
-            <SportsEditor
-              project={editingSportsProject}
-              onRenameProject={handleRenameProject}
-              onRequestExit={() =>
-                guardNavigation(() => {
-                  setEditingSportsProjectId(null);
-                  setEditingFallbackProject(null);
-                })
-              }
-              onUnsavedStateChange={handleEditorUnsavedChange}
-            />
+          {activeSection === 'projects' && editingProject ? (
+            editingProject.module === 'house' ? (
+              <HouseEditor
+                project={editingProject}
+                onRenameProject={handleRenameProject}
+                onRequestExit={() =>
+                  guardNavigation(() => {
+                    setEditingProjectId(null);
+                    setEditingFallbackProject(null);
+                  })
+                }
+                onUnsavedStateChange={handleEditorUnsavedChange}
+              />
+            ) : (
+              <SportsEditor
+                project={editingProject}
+                onRenameProject={handleRenameProject}
+                onRequestExit={() =>
+                  guardNavigation(() => {
+                    setEditingProjectId(null);
+                    setEditingFallbackProject(null);
+                  })
+                }
+                onUnsavedStateChange={handleEditorUnsavedChange}
+              />
+            )
           ) : activeSection === 'projects' ? (
             <div className="max-w-6xl space-y-6">
               {/* Search & Filter Toolbar */}
@@ -1025,9 +1042,9 @@ function WorkspaceApp() {
                       project={project}
                       canDelete={canDeleteProject(project)}
                       onOpen={(proj) => {
-                        if (proj.module === 'sports') {
+                        if (proj.module === 'sports' || proj.module === 'house') {
                           setEditingFallbackProject(proj);
-                          setEditingSportsProjectId(proj.projectId);
+                          setEditingProjectId(proj.projectId);
                         } else {
                           setSelectedProject(proj);
                         }
@@ -1099,68 +1116,25 @@ function WorkspaceApp() {
         onDelete={handleDeleteProject}
       />
 
-      {pendingNavAction && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="unsaved-nav-title"
-        >
-          <div className="w-full max-w-md bg-white border border-slate-200 rounded-xl p-6">
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-4 h-4 text-amber-700" aria-hidden="true" />
-              </div>
-              <div>
-                <h2
-                  id="unsaved-nav-title"
-                  className="font-display text-base font-semibold text-slate-900"
-                >
-                  Unsaved scene changes
-                </h2>
-                <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                  Your recent Sports Ground edits have not finished saving to Firestore yet.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPendingNavAction(null)}
-                className="px-3.5 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 whitespace-nowrap"
-              >
-                Stay in editor
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const action = pendingNavAction;
-                  setPendingNavAction(null);
-                  action();
-                }}
-                className="px-3.5 py-2 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 whitespace-nowrap"
-              >
-                Discard &amp; leave
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const action = pendingNavAction;
-                  void (async () => {
-                    await unsavedEditorRef.current.flushSave();
-                    setPendingNavAction(null);
-                    action();
-                  })();
-                }}
-                className="px-3.5 py-2 text-xs font-medium text-white bg-slate-900 rounded-lg hover:bg-slate-800 whitespace-nowrap"
-              >
-                Save &amp; leave
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <UnsavedChangesModal
+        open={Boolean(pendingNavAction)}
+        title="Unsaved scene changes"
+        description="Your recent edits have not finished saving to Firestore yet."
+        onStay={() => setPendingNavAction(null)}
+        onDiscard={() => {
+          const action = pendingNavAction;
+          setPendingNavAction(null);
+          action?.();
+        }}
+        onSaveAndLeave={() => {
+          const action = pendingNavAction;
+          void (async () => {
+            await unsavedEditorRef.current.flushSave();
+            setPendingNavAction(null);
+            action?.();
+          })();
+        }}
+      />
     </div>
   );
 }

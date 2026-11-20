@@ -11,6 +11,7 @@ import {
 import { signInWithPopup, signOut, type User } from 'firebase/auth';
 import { auth, db, googleProvider } from '../firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
+import { createInitialFloorPlan } from '../lib/house/presets';
 import { createInitialScene } from '../lib/sports/presets';
 import type { SportPresetId } from '../lib/sports/types';
 import {
@@ -323,6 +324,12 @@ export async function createProject(params: {
     payload.sport = chosenSport;
     payload.scene = {
       ...initialScene,
+      updatedAt: serverTimestamp(),
+    };
+  } else if (params.module === 'house') {
+    const initialFloorPlan = createInitialFloorPlan();
+    payload.floorPlan = {
+      ...initialFloorPlan,
       updatedAt: serverTimestamp(),
     };
   }

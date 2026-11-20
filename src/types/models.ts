@@ -1,4 +1,5 @@
 import type { Timestamp } from 'firebase/firestore';
+import type { FloorPlan } from '../lib/house/types';
 import type { SportPresetId, SportsScene } from '../lib/sports/types';
 
 export type MembershipRole = 'owner' | 'admin' | 'manager' | 'collaborator';
@@ -58,6 +59,7 @@ export interface ProjectDoc {
   updatedAt?: Timestamp;
   sport?: SportPresetId;
   scene?: SportsScene;
+  floorPlan?: FloorPlan;
 }
 
 export type ActiveWorkspace =

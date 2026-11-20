@@ -112,7 +112,7 @@ service cloud.firestore {
         el.x is number && el.y is number &&
         el.width is number && el.width > 0 && el.width <= 1000 &&
         el.height is number && el.height > 0 && el.height <= 1000 &&
-        el.rotation is number && el.rotation >= 0 && el.rotation < 360 &&
+        el.rotation is number && el.rotation >= 0 && el.rotation <= 360 &&
         el.shape in ['rect', 'circle'] &&
         (el.materialId == null || (el.materialId is string && el.materialId.size() <= 128)) &&
         el.materialName is string && el.materialName.size() <= 120 &&
@@ -127,15 +127,95 @@ service cloud.firestore {
         scene.keys().hasOnly(['version', 'units', 'gridSize', 'elements', 'updatedAt']) &&
         scene.version == 1 &&
         scene.units in ['metric', 'imperial'] &&
-        scene.gridSize is number && scene.gridSize >= 0.1 && scene.gridSize <= 10 &&
+        scene.gridSize is number && scene.gridSize >= 0.05 && scene.gridSize <= 20 &&
         scene.elements is list && scene.elements.size() <= 200 &&
         (scene.elements.size() == 0 || isValidSceneElement(scene.elements[0])) &&
         scene.updatedAt is timestamp;
     }
 
+    function isValidPoint2D(pt) {
+      return pt is map &&
+        pt.keys().hasAll(['x', 'y']) &&
+        pt.keys().hasOnly(['x', 'y']) &&
+        pt.x is number && pt.y is number;
+    }
+
+    function isValidWall(w) {
+      return w is map &&
+        w.keys().hasAll(['id', 'x1', 'y1', 'x2', 'y2', 'thickness']) &&
+        w.keys().hasOnly(['id', 'x1', 'y1', 'x2', 'y2', 'thickness']) &&
+        w.id is string && w.id.size() >= 1 && w.id.size() <= 128 &&
+        w.x1 is number && w.y1 is number &&
+        w.x2 is number && w.y2 is number &&
+        w.thickness is number && w.thickness > 0 && w.thickness <= 5;
+    }
+
+    function isValidRoom(r) {
+      return r is map &&
+        r.keys().hasAll(['id', 'name', 'polygon', 'floorId']) &&
+        r.keys().hasOnly(['id', 'name', 'polygon', 'floorId']) &&
+        r.id is string && r.id.size() >= 1 && r.id.size() <= 128 &&
+        r.name is string && r.name.size() >= 1 && r.name.size() <= 120 &&
+        r.floorId is string && r.floorId.size() >= 1 && r.floorId.size() <= 128 &&
+        r.polygon is list && r.polygon.size() >= 3 && r.polygon.size() <= 100 &&
+        isValidPoint2D(r.polygon[0]);
+    }
+
+    function isValidOpening(op) {
+      return op is map &&
+        op.keys().hasAll(['id', 'wallId', 'type', 'offset', 'width', 'height']) &&
+        op.keys().hasOnly(['id', 'wallId', 'type', 'offset', 'width', 'height']) &&
+        op.id is string && op.id.size() >= 1 && op.id.size() <= 128 &&
+        op.wallId is string && op.wallId.size() >= 1 && op.wallId.size() <= 128 &&
+        op.type in ['door', 'window'] &&
+        op.offset is number && op.offset >= 0 && op.offset <= 10000 &&
+        op.width is number && op.width > 0 && op.width <= 1000 &&
+        op.height is number && op.height > 0 && op.height <= 20;
+    }
+
+    function isValidFloor(f) {
+      return f is map &&
+        f.keys().hasAll(['id', 'name', 'level', 'walls', 'rooms', 'openings']) &&
+        f.keys().hasOnly(['id', 'name', 'level', 'walls', 'rooms', 'openings']) &&
+        f.id is string && f.id.size() >= 1 && f.id.size() <= 128 &&
+        f.name is string && f.name.size() >= 1 && f.name.size() <= 120 &&
+        f.level is number && f.level >= -10 && f.level <= 200 &&
+        f.walls is list && f.walls.size() <= 500 &&
+        (f.walls.size() == 0 || isValidWall(f.walls[0])) &&
+        f.rooms is list && f.rooms.size() <= 200 &&
+        (f.rooms.size() == 0 || isValidRoom(f.rooms[0])) &&
+        f.openings is list && f.openings.size() <= 500 &&
+        (f.openings.size() == 0 || isValidOpening(f.openings[0]));
+    }
+
+    function isValidSite(site) {
+      return site is map &&
+        site.keys().hasAll(['width', 'depth']) &&
+        site.keys().hasOnly(['width', 'depth']) &&
+        site.width is number && site.width >= 1 && site.width <= 1000 &&
+        site.depth is number && site.depth >= 1 && site.depth <= 1000;
+    }
+
+    function isValidFloorPlan(fp) {
+      return fp is map &&
+        fp.keys().hasAll(['version', 'units', 'gridSize', 'site', 'floors', 'updatedAt']) &&
+        fp.keys().hasOnly(['version', 'units', 'gridSize', 'site', 'floors', 'updatedAt']) &&
+        fp.version == 1 &&
+        fp.units in ['metric', 'imperial'] &&
+        fp.gridSize is number && fp.gridSize >= 0.05 && fp.gridSize <= 20 &&
+        isValidSite(fp.site) &&
+        fp.floors is list && fp.floors.size() >= 1 && fp.floors.size() <= 50 &&
+        isValidFloor(fp.floors[0]) &&
+        (fp.floors.size() < 2 || isValidFloor(fp.floors[1])) &&
+        (fp.floors.size() < 3 || isValidFloor(fp.floors[2])) &&
+        (fp.floors.size() < 4 || isValidFloor(fp.floors[3])) &&
+        (fp.floors.size() < 5 || isValidFloor(fp.floors[4])) &&
+        fp.updatedAt is timestamp;
+    }
+
     function isValidProject(data, projectId) {
       return data.keys().hasAll(['projectId', 'ownerType', 'ownerId', 'name', 'module', 'status', 'createdBy', 'createdAt']) &&
-        data.keys().hasOnly(['projectId', 'ownerType', 'ownerId', 'name', 'module', 'status', 'createdBy', 'createdAt', 'updatedAt', 'sport', 'scene']) &&
+        data.keys().hasOnly(['projectId', 'ownerType', 'ownerId', 'name', 'module', 'status', 'createdBy', 'createdAt', 'updatedAt', 'sport', 'scene', 'floorPlan']) &&
         data.projectId is string && data.projectId == projectId && isValidId(data.projectId) &&
         data.ownerType in ['user', 'org'] &&
         data.ownerId is string && isValidId(data.ownerId) &&
@@ -146,7 +226,8 @@ service cloud.firestore {
         data.createdAt is timestamp &&
         (!('updatedAt' in data) || data.updatedAt is timestamp) &&
         (!('sport' in data) || data.sport in ['basketball', 'football', 'volleyball', 'tennis', 'handball', 'custom']) &&
-        (!('scene' in data) || (data.module == 'sports' && isValidScene(data.scene)));
+        (!('scene' in data) || (data.module == 'sports' && isValidScene(data.scene))) &&
+        (!('floorPlan' in data) || (data.module == 'house' && isValidFloorPlan(data.floorPlan)));
     }
 
     function canReadProject(data) {
@@ -310,6 +391,7 @@ service cloud.firestore {
         incoming().createdAt == request.time &&
         !('updatedAt' in incoming()) &&
         (!('scene' in incoming()) || incoming().scene.updatedAt == request.time) &&
+        (!('floorPlan' in incoming()) || incoming().floorPlan.updatedAt == request.time) &&
         (
           (incoming().ownerType == 'user' && incoming().ownerId == request.auth.uid) ||
           (
@@ -337,14 +419,42 @@ service cloud.firestore {
           // Action 3: Save sports ground scene
           (
             existing().module == 'sports' &&
+            'scene' in incoming() &&
             incoming().scene.updatedAt == request.time &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['scene', 'updatedAt'])
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['scene', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt'])
+            )
           ) ||
           // Action 4: Rename + Save sports ground scene together
           (
             existing().module == 'sports' &&
+            'scene' in incoming() &&
             incoming().scene.updatedAt == request.time &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'scene', 'updatedAt'])
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'scene', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'updatedAt'])
+            )
+          ) ||
+          // Action 5: Save house floor plan
+          (
+            existing().module == 'house' &&
+            'floorPlan' in incoming() &&
+            incoming().floorPlan.updatedAt == request.time &&
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['floorPlan', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt'])
+            )
+          ) ||
+          // Action 6: Rename + Save house floor plan together
+          (
+            existing().module == 'house' &&
+            'floorPlan' in incoming() &&
+            incoming().floorPlan.updatedAt == request.time &&
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'floorPlan', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'updatedAt'])
+            )
           )
         );
       allow delete: if isVerifiedUser() && isValidId(projectId) &&
